@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02. Java / Spring 컨벤션 — 유니온플레이스 코딩 컨벤션</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="org">UNIONPLACE</span>
+    <span class="doc">코딩 컨벤션 · CHAPTER 02</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="breadcrumb"><a href="index.html">코딩 컨벤션 가이드</a> &rsaquo; 02. Java / Spring 컨벤션</div>
+
+  <h1>02. Java / Spring 컨벤션</h1>
+  <div class="doc-meta"><span>규칙 JV-01 ~ JV-10</span><span>최종 개정 2026-09-22</span></div>
+
+  <h2>레이어 구조</h2>
+
+  <h3><span class="rule-id">JV-01</span>표준 레이어와 의존 방향</h3>
+  <p>의존은 항상 아래 방향으로만 흐른다. Repository가 Service를 호출하거나, Controller가 Repository를 직접 호출하는 것을 금지한다.</p>
+  <pre><code>Controller  →  Service  →  Repository
+   (web)       (비즈니스)      (영속성)</code></pre>
+
+  <h3><span class="rule-id">JV-02</span>Controller는 얇게 유지한다</h3>
+  <p>
+    Controller에는 요청 검증, Service 호출, 응답 변환만 둔다.
+    비즈니스 분기·계산 로직이 Controller에 있으면 Service로 옮겨야 한다.
+  </p>
+
+  <h2>DTO와 Entity</h2>
+
+  <h3><span class="rule-id">JV-03</span>Entity를 API 응답으로 직접 노출하는 것을 금지한다</h3>
+  <p>
+    Entity 변경이 API 스펙 변경으로 번지는 것을 막고, 지연 로딩 직렬화 사고를 방지하기 위함이다.
+    응답은 반드시 Response DTO로 변환한다.
+  </p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>@GetMapping("/reviews/{id}")
+public PrReview getReview(@PathVariable Long id) {
+    return reviewRepository.findById(id).orElseThrow();  // Entity 직접 반환
+}</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>@GetMapping("/reviews/{id}")
+public ReviewResponse getReview(@PathVariable Long id) {
+    return ReviewResponse.from(reviewService.getReview(id));
+}</code></pre>
+  </div>
+
+  <h3><span class="rule-id">JV-04</span>DTO 변환 위치</h3>
+  <p>
+    Entity → DTO 변환은 DTO의 정적 팩토리 메서드 <code>from(entity)</code>에 둔다.
+    DTO → Entity 변환은 <code>toEntity()</code>에 둔다. 변환 로직이 Service 본문에 흩어지는 것을 금지한다.
+    페이징 목록은 Service 에서 <code>PageResponses.from(page).map(Response::from)</code> 으로 변환해
+    <code>PageResponse&lt;Response&gt;</code> 를 반환한다 (프레임워크 가이드 02).
+  </p>
+
+  <h2>트랜잭션</h2>
+
+  <h3><span class="rule-id">JV-05</span><code>@Transactional</code>은 Service 레이어에만 선언한다</h3>
+  <p>조회 전용 메서드에는 <code>@Transactional(readOnly = true)</code>를 명시한다.</p>
+
+  <h3><span class="rule-id">JV-06</span>트랜잭션 내 외부 I/O 금지</h3>
+  <p>
+    트랜잭션 범위 안에서 HTTP 호출(Bitbucket API, vLLM 등)·파일 I/O를 수행하는 것을 금지한다.
+    외부 호출 지연이 DB 커넥션 점유로 이어진다. 외부 호출은 트랜잭션 밖으로 분리하거나
+    이벤트/Celery 비동기 작업으로 처리한다.
+  </p>
+
+  <h2>구현 규칙</h2>
+
+  <h3><span class="rule-id">JV-07</span>생성자 주입을 사용한다</h3>
+  <p>필드 주입(<code>@Autowired</code> 필드)을 금지한다. <code>@RequiredArgsConstructor</code> + <code>final</code> 필드 조합을 표준으로 한다.</p>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>@Service
+@RequiredArgsConstructor
+public class ReviewService {
+    private final ReviewRepository reviewRepository;
+    private final KbResolver kbResolver;
+}</code></pre>
+  </div>
+
+  <h3><span class="rule-id">JV-08</span>Lombok 사용 기준</h3>
+  <table>
+    <tr><th>애너테이션</th><th>기준</th></tr>
+    <tr><td><code>@Getter</code>, <code>@RequiredArgsConstructor</code></td><td>허용 (표준)</td></tr>
+    <tr><td><code>@Builder</code></td><td>허용 — 필드 4개 이상 객체 생성 시 권장</td></tr>
+    <tr><td><code>@Setter</code></td><td>Entity에는 금지. 상태 변경은 의도가 드러나는 메서드로 작성</td></tr>
+    <tr><td><code>@Data</code>, <code>@ToString</code>(Entity)</td><td>금지 — 연관관계 순환 참조 및 무분별한 setter 노출</td></tr>
+  </table>
+
+  <h3><span class="rule-id">JV-09</span>null 대신 Optional / 빈 컬렉션</h3>
+  <p>
+    컬렉션 반환 메서드는 null 대신 빈 컬렉션을 반환한다.
+    단건 조회는 <code>Optional</code>을 반환하고, 호출부에서 <code>orElseThrow</code>로 의도를 명시한다.
+    "없으면 404" 가 전부인 조회는 <code>RepositorySupport.getOrThrow(repo, id, "Customer")</code> 를 사용해도 된다.
+    메서드 파라미터로 <code>Optional</code>을 받는 것은 금지한다.
+  </p>
+
+  <h3><span class="rule-id">JV-10</span>JPA 연관관계 기본값</h3>
+  <p>
+    모든 연관관계는 <code>FetchType.LAZY</code>를 기본으로 한다.
+    N+1이 확인된 조회는 fetch join 또는 <code>@EntityGraph</code>로 해결하고,
+    해결 근거를 PR 본문에 남긴다.
+    모든 엔티티는 프레임워크 <code>BaseEntity</code>(또는 <code>SoftDeletableEntity</code>)를 상속한다 — 상세는 <a href="06-framework-rules.html">06. 프레임워크 적용 규칙</a> FW-02.
+  </p>
+
+  <div class="callout">
+    <strong>리뷰 중점 항목</strong> — PR 리뷰 시 본 장에서 우선 확인할 항목:
+    Entity 직접 반환(JV-03), 트랜잭션 내 외부 호출(JV-06), 필드 주입(JV-07).
+    세 항목은 위반 시 머지 불가로 처리한다.
+  </div>
+
+  <div class="page-nav">
+    <a href="01-naming.html">&larr; 01. 네이밍 규칙</a>
+    <a href="03-exception-logging.html">03. 예외 처리 및 로깅 &rarr;</a>
+  </div>
+</div>
+
+<footer class="doc-footer">© UNIONPLACE 개발본부 · 사내 한정 문서</footer>
+
+</body>
+</html>

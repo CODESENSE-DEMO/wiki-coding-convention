@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05. Git 브랜치 및 커밋 규칙 — 유니온플레이스 코딩 컨벤션</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="org">UNIONPLACE</span>
+    <span class="doc">코딩 컨벤션 · CHAPTER 05</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="breadcrumb"><a href="index.html">코딩 컨벤션 가이드</a> &rsaquo; 05. Git 브랜치 및 커밋 규칙</div>
+
+  <h1>05. Git 브랜치 및 커밋 규칙</h1>
+  <div class="doc-meta"><span>규칙 GIT-01 ~ GIT-06</span><span>최종 개정 2026-02-03</span></div>
+
+  <h2>브랜치 전략</h2>
+
+  <h3><span class="rule-id">GIT-01</span>브랜치 종류와 네이밍</h3>
+  <table>
+    <tr><th>브랜치</th><th>용도</th><th>네이밍</th></tr>
+    <tr><td><code>main</code></td><td>운영 배포 기준. 직접 push 금지.</td><td>—</td></tr>
+    <tr><td><code>develop</code></td><td>통합 개발 브랜치</td><td>—</td></tr>
+    <tr><td>feature</td><td>기능 개발</td><td><code>feature/{이슈키}-{요약}</code> 예: <code>feature/COA-231-kb-lazy-build</code></td></tr>
+    <tr><td>fix</td><td>develop 대상 버그 수정</td><td><code>fix/{이슈키}-{요약}</code></td></tr>
+    <tr><td>release</td><td>배포 준비</td><td><code>release/{버전}</code> 예: <code>release/1.4.0</code></td></tr>
+    <tr><td>hotfix</td><td>운영 긴급 수정 (main 분기)</td><td><code>hotfix/{이슈키}-{요약}</code></td></tr>
+  </table>
+
+  <h3><span class="rule-id">GIT-02</span>보호 브랜치 정책</h3>
+  <p>
+    <code>main</code>·<code>develop</code> 직접 push를 금지한다. 모든 변경은 PR을 통해서만 머지한다.
+    머지 조건: 승인 1인 이상 + CI 통과 + CoA 자동 리뷰 코멘트 확인.
+  </p>
+
+  <h2>커밋</h2>
+
+  <h3><span class="rule-id">GIT-03</span>커밋 메시지 형식 (Conventional Commits 변형)</h3>
+  <pre><code>{type}: {제목 — 한국어, 50자 이내, 마침표 없음}
+
+{본문 — 선택. 무엇을/왜 중심으로 작성}
+
+{이슈키 — 예: COA-231}</code></pre>
+  <table>
+    <tr><th>type</th><th>용도</th></tr>
+    <tr><td>feat</td><td>기능 추가</td></tr>
+    <tr><td>fix</td><td>버그 수정</td></tr>
+    <tr><td>refactor</td><td>동작 변경 없는 구조 개선</td></tr>
+    <tr><td>test</td><td>테스트 추가·수정</td></tr>
+    <tr><td>docs</td><td>문서 변경</td></tr>
+    <tr><td>chore</td><td>빌드·설정·의존성 등</td></tr>
+  </table>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>수정
+asdf
+fix bug</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>feat: KB 폐기 미리보기 API 추가
+
+TTL 일수를 파라미터로 받아 폐기 예정 KB 목록을 dry-run으로 반환한다.
+실제 삭제는 기존 lifecycle beat 잡에서만 수행하도록 분리.
+
+COA-247</code></pre>
+  </div>
+
+  <h3><span class="rule-id">GIT-04</span>커밋 단위</h3>
+  <p>
+    하나의 커밋은 하나의 논리적 변경만 담는다. 기능 변경과 대규모 포매팅을 한 커밋에 섞는 것을 금지한다.
+    포매팅·리네이밍만의 변경은 별도 <code>refactor</code> 커밋으로 분리한다.
+  </p>
+
+  <h2>Pull Request</h2>
+
+  <h3><span class="rule-id">GIT-05</span>PR 작성 기준</h3>
+  <ul>
+    <li>제목은 커밋 제목 규칙과 동일한 형식으로 작성한다.</li>
+    <li>본문에 변경 배경, 주요 변경점, 테스트 방법, 관련 이슈키를 포함한다. CoA 자동 리뷰가 PR 제목·본문 키워드로 사내 문서를 검색하므로, 핵심 도메인 용어를 본문에 명시한다.</li>
+    <li>리뷰 가능한 크기를 유지한다 — 변경 500라인 초과 시 분할을 권장한다.</li>
+  </ul>
+
+  <h3><span class="rule-id">GIT-06</span>머지 방식</h3>
+  <p>
+    feature → develop은 <strong>squash merge</strong>를 표준으로 한다.
+    release/hotfix → main은 merge commit을 사용해 배포 이력을 보존한다.
+    머지 완료된 브랜치는 즉시 삭제한다.
+  </p>
+
+  <div class="callout">
+    <strong>참고</strong> — 시크릿(토큰, 비밀번호, 인증서)을 커밋하는 것을 금지한다.
+    실수로 커밋한 경우 단순 삭제 커밋으로는 이력에 남으므로, 즉시 해당 시크릿을 폐기(rotate)하고
+    인프라 담당자에게 보고한다.
+  </div>
+
+  <div class="page-nav">
+    <a href="04-rest-api.html">&larr; 04. REST API 설계 규칙</a>
+    <a href="06-framework-rules.html">06. 프레임워크 적용 규칙 &rarr;</a>
+  </div>
+</div>
+
+<footer class="doc-footer">© UNIONPLACE 개발본부 · 사내 한정 문서</footer>
+
+</body>
+</html>

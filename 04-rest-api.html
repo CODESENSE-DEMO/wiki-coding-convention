@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04. REST API 설계 규칙 — 유니온플레이스 코딩 컨벤션</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="org">UNIONPLACE</span>
+    <span class="doc">코딩 컨벤션 · CHAPTER 04</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="breadcrumb"><a href="index.html">코딩 컨벤션 가이드</a> &rsaquo; 04. REST API 설계 규칙</div>
+
+  <h1>04. REST API 설계 규칙</h1>
+  <div class="doc-meta"><span>규칙 API-01 ~ API-07</span><span>최종 개정 2026-09-22</span></div>
+
+  <h2>URI 설계</h2>
+
+  <h3><span class="rule-id">API-01</span>URI는 자원 중심으로 설계한다</h3>
+  <p>
+    명사·복수형·kebab-case를 사용하고, URI에 동사를 넣는 것을 금지한다.
+    행위는 HTTP 메서드로 표현한다. 버전은 경로 첫 단에 둔다(<code>/api/v1</code>).
+  </p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>POST /api/v1/createReview
+GET  /api/v1/getKbList?type=repo</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>POST /api/v1/reviews
+GET  /api/v1/shared-kbs?kind=repo_branch
+GET  /api/v1/repos/{projectKey}/{repoSlug}/kb-config</code></pre>
+  </div>
+
+  <h3><span class="rule-id">API-02</span>HTTP 메서드 의미를 지킨다</h3>
+  <table>
+    <tr><th>메서드</th><th>용도</th><th>비고</th></tr>
+    <tr><td>GET</td><td>조회</td><td>상태 변경 금지 (멱등)</td></tr>
+    <tr><td>POST</td><td>생성, 비멱등 명령</td><td>생성 성공 시 201 (<code>@ResponseStatus(HttpStatus.CREATED)</code>)</td></tr>
+    <tr><td>PUT</td><td>전체 교체</td><td>멱등</td></tr>
+    <tr><td>PATCH</td><td>부분 수정</td><td>변경 필드만 전달</td></tr>
+    <tr><td>DELETE</td><td>삭제</td><td>성공 시 200 + envelope(<code>data</code> 없음). 204 는 사용하지 않는다</td></tr>
+  </table>
+
+  <h2>응답</h2>
+
+  <h3><span class="rule-id">API-03</span>공통 응답 포맷</h3>
+  <p>
+    모든 응답은 Union Framework 의 <code>ApiResponse</code> envelope 를 사용한다. 필드명은 camelCase로 한다.
+    컨트롤러는 Response DTO 를 <strong>그대로 반환</strong>하고 프레임워크가 자동으로 감싼다.
+    컨트롤러에서 <code>ApiResponse.ok(...)</code> 나 <code>ResponseEntity</code> 로 직접 감싸는 것을 금지한다
+    (상태 코드가 필요하면 <code>@ResponseStatus</code>).
+  </p>
+  <pre><code>// 성공
+{
+  "success": true,
+  "code": "OK",
+  "message": "성공",
+  "data": { ... },
+  "traceId": "8cb73d6623ac4770",
+  "timestamp": "2026-09-22T09:25:47.403"
+}
+
+// 실패
+{
+  "success": false,
+  "code": "CUSTOMER_001",
+  "message": "고객을 찾을 수 없습니다. id=9999",
+  "traceId": "8cb73d6623ac4770",
+  "timestamp": "2026-09-22T09:25:47.403"
+}
+
+// 검증 실패 (400)
+{
+  "success": false,
+  "code": "COMMON_400",
+  "message": "잘못된 입력값입니다.",
+  "errors": [ { "field": "email", "rejectedValue": "bad", "reason": "이메일 형식이 올바르지 않습니다." } ],
+  "traceId": "...", "timestamp": "..."
+}</code></pre>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>@GetMapping("/{id}")
+public ResponseEntity&lt;CustomerResponse&gt; get(@PathVariable Long id) {
+    return ResponseEntity.ok(customerService.getCustomer(id));
+}</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>@GetMapping("/{id}")
+public CustomerResponse get(@PathVariable Long id) {
+    return customerService.getCustomer(id);      // 프레임워크가 ApiResponse 로 래핑
+}</code></pre>
+  </div>
+
+  <h3><span class="rule-id">API-04</span>상태 코드 기준</h3>
+  <table>
+    <tr><th>코드</th><th>사용 기준</th></tr>
+    <tr><td>200 / 201</td><td>조회·수정·삭제 성공 / 생성 성공. 항상 envelope 를 내려보내므로 204 는 쓰지 않는다</td></tr>
+    <tr><td>400</td><td>요청 형식·검증 오류 — 프레임워크가 <code>COMMON_400</code> 으로 자동 변환</td></tr>
+    <tr><td>401 / 403</td><td>미인증(<code>COMMON_401</code>) / 권한 없음(<code>COMMON_403</code>) — 프레임워크 보안 계층이 처리</td></tr>
+    <tr><td>404</td><td>자원 없음 — <code>EntityNotFoundException</code> 계열 (status 404 ErrorCode)</td></tr>
+    <tr><td>409</td><td>상태 충돌 (중복 등록, 동시 수정 등) — status 409 ErrorCode 의 <code>BusinessException</code></td></tr>
+    <tr><td>500</td><td>서버 내부 오류(<code>COMMON_500</code>) — 비즈니스 예외를 500으로 뭉개는 것을 금지한다</td></tr>
+  </table>
+
+  <h3><span class="rule-id">API-05</span>페이징 표준</h3>
+  <p>
+    목록 API는 <code>page</code>(0-base)·<code>size</code>(기본 20, 최대 100) 쿼리 파라미터를 받고,
+    프레임워크 <code>PageResponse</code> 로 응답한다. 컨트롤러는 <code>@PageableDefault(size = 20) Pageable</code> 로 받고,
+    Service 는 <code>PageResponses.from(page).map(Response::from)</code> 으로 변환한다.
+    Spring Data <code>Page</code> 를 그대로 반환하는 것을 금지한다.
+  </p>
+  <pre><code>GET /api/v1/customers?page=0&amp;size=20&amp;sort=createdAt,desc
+
+"data": {
+  "content": [ ... ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 142,
+  "totalPages": 8,
+  "first": true,
+  "last": false
+}</code></pre>
+
+  <h2>요청 처리</h2>
+
+  <h3><span class="rule-id">API-06</span>요청 검증은 진입 지점에서 수행한다</h3>
+  <p>
+    Bean Validation(<code>@Valid</code>, <code>@NotNull</code>, <code>@Size</code> 등)을 Request DTO에 선언하고,
+    검증 실패는 프레임워크 전역 핸들러가 400 + <code>errors[]</code> 로 일괄 변환한다.
+    <code>@RequestBody</code> 에 <code>@Valid</code> 를 빠뜨리면 검증이 전혀 수행되지 않으므로 리뷰 시 반드시 확인한다.
+    Service 본문에서 형식 검증을 반복하는 것을 금지한다.
+  </p>
+
+  <h3><span class="rule-id">API-07</span>호환성 유지</h3>
+  <p>
+    배포된 API의 필드 삭제·의미 변경은 breaking change로 간주한다.
+    필드 추가는 허용한다. breaking change가 필요하면 신규 버전(<code>/api/v2</code>)을 추가하고
+    구버전은 최소 1개 분기 유예 후 제거한다.
+  </p>
+
+  <div class="callout">
+    <strong>참고</strong> — 신규 API는 머지 전 OpenAPI(Swagger) 문서화가 완료되어야 하며,
+    PR 본문에 해당 엔드포인트 스펙 링크를 첨부한다.
+  </div>
+
+  <div class="page-nav">
+    <a href="03-exception-logging.html">&larr; 03. 예외 처리 및 로깅</a>
+    <a href="05-git.html">05. Git 브랜치 및 커밋 규칙 &rarr;</a>
+  </div>
+</div>
+
+<footer class="doc-footer">© UNIONPLACE 개발본부 · 사내 한정 문서</footer>
+
+</body>
+</html>

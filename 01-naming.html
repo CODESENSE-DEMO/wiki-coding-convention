@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01. 네이밍 규칙 — 유니온플레이스 코딩 컨벤션</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="org">UNIONPLACE</span>
+    <span class="doc">코딩 컨벤션 · CHAPTER 01</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="breadcrumb"><a href="index.html">코딩 컨벤션 가이드</a> &rsaquo; 01. 네이밍 규칙</div>
+
+  <h1>01. 네이밍 규칙</h1>
+  <div class="doc-meta"><span>규칙 NM-01 ~ NM-08</span><span>최종 개정 2026-05-12</span></div>
+
+  <h2>기본 원칙</h2>
+  <p>
+    이름은 그 자체로 역할과 의도를 설명해야 한다. 주석으로 이름의 의미를 보충해야 한다면
+    그 이름은 잘못된 것이다. 축약어는 도메인에서 보편적으로 통용되는 것만 허용한다
+    (<code>id</code>, <code>url</code>, <code>dto</code>, <code>pr</code> 등).
+  </p>
+
+  <h2>식별자 규칙</h2>
+
+  <h3><span class="rule-id">NM-01</span>패키지</h3>
+  <p>모두 소문자, 단수형을 사용한다. 회사 도메인 역순으로 시작한다.</p>
+  <pre><code>com.unionplace.codesense.review
+com.unionplace.codesense.kb.resolver</code></pre>
+
+  <h3><span class="rule-id">NM-02</span>클래스 / 인터페이스</h3>
+  <p>
+    PascalCase를 사용한다. 역할 접미사를 일관되게 사용한다:
+    <code>Controller</code>, <code>Service</code>, <code>Repository</code>, <code>Config</code>,
+    <code>Dto</code>(요청/응답은 <code>Request</code>/<code>Response</code>).
+    인터페이스에 <code>I</code> 접두사를 붙이는 것을 금지한다.
+  </p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>public interface IReviewService { ... }
+public class ReviewSvcImpl { ... }</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>public interface ReviewService { ... }
+public class DefaultReviewService implements ReviewService { ... }</code></pre>
+  </div>
+
+  <h3><span class="rule-id">NM-03</span>메서드</h3>
+  <p>camelCase, 동사로 시작한다. boolean 반환 메서드는 <code>is</code>/<code>has</code>/<code>can</code>으로 시작한다.</p>
+  <table>
+    <tr><th>의도</th><th>접두사</th><th>예</th></tr>
+    <tr><td>조회 (없으면 예외)</td><td>get</td><td><code>getReviewById</code></td></tr>
+    <tr><td>조회 (없으면 Optional/null)</td><td>find</td><td><code>findReviewById</code></td></tr>
+    <tr><td>목록 조회</td><td>find~All / list</td><td><code>findAllByRepo</code></td></tr>
+    <tr><td>생성</td><td>create / register</td><td><code>createKbProject</code></td></tr>
+    <tr><td>수정</td><td>update / change</td><td><code>updateTrackedBranches</code></td></tr>
+    <tr><td>삭제</td><td>delete / evict</td><td><code>evictStaleKb</code></td></tr>
+  </table>
+
+  <h3><span class="rule-id">NM-04</span>변수</h3>
+  <p>
+    camelCase를 사용한다. 한 글자 변수는 반복문 인덱스(<code>i</code>, <code>j</code>)와
+    람다의 명백한 파라미터 외에는 금지한다. 컬렉션 변수는 복수형으로 짓는다
+    (<code>reviews</code>, <code>trackedBranches</code>).
+  </p>
+
+  <h3><span class="rule-id">NM-05</span>상수</h3>
+  <p>UPPER_SNAKE_CASE를 사용한다. 매직 넘버·매직 스트링을 코드에 직접 쓰는 것을 금지한다.</p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>if (retryCount > 3) { ... }</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>private static final int MAX_RETRY_COUNT = 3;
+
+if (retryCount > MAX_RETRY_COUNT) { ... }</code></pre>
+  </div>
+
+  <h3><span class="rule-id">NM-06</span>DB 테이블 / 컬럼</h3>
+  <p>
+    snake_case 소문자를 사용한다. 테이블은 복수형(<code>pr_reviews</code>), PK는 <code>id</code>,
+    FK는 <code>{참조테이블 단수형}_id</code>(<code>project_id</code>)로 짓는다.
+    시각 컬럼은 <code>~_at</code>(<code>created_at</code>, <code>last_used_at</code>),
+    boolean 컬럼은 <code>is_~</code> 또는 동사형(<code>enabled</code>)을 사용한다.
+  </p>
+
+  <h3><span class="rule-id">NM-07</span>TypeScript / React</h3>
+  <p>
+    컴포넌트는 PascalCase 파일명과 일치시킨다(<code>RepoKbConfigTable.tsx</code>).
+    훅은 <code>use</code> 접두사(<code>useKbPolling</code>), 이벤트 핸들러는
+    <code>handle~</code>(정의) / <code>on~</code>(prop)으로 구분한다.
+  </p>
+
+  <h3><span class="rule-id">NM-08</span>Python</h3>
+  <p>
+    PEP 8을 따른다. 모듈·함수·변수는 snake_case, 클래스는 PascalCase.
+    Celery task 함수명은 <code>동사_목적어</code> 형태로 짓는다
+    (<code>sync_shared_project</code>, <code>evict_stale_branch_kbs</code>).
+  </p>
+
+  <div class="callout">
+    <strong>참고</strong> — 신규 용어가 필요할 때는 먼저 도메인 용어집(사내 위키 &gt; 개발본부 &gt; 용어집)을 확인하고,
+    없으면 용어집에 등록한 뒤 사용한다. 같은 개념에 두 가지 이름이 생기는 것을 가장 경계한다.
+  </div>
+
+  <div class="page-nav">
+    <a href="index.html">&larr; 목차로</a>
+    <a href="02-java-spring.html">02. Java / Spring 컨벤션 &rarr;</a>
+  </div>
+</div>
+
+<footer class="doc-footer">© UNIONPLACE 개발본부 · 사내 한정 문서</footer>
+
+</body>
+</html>

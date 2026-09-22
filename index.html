@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유니온플레이스 코딩 컨벤션 가이드</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="org">UNIONPLACE</span>
+    <span class="doc">개발본부 표준 문서 · 코딩 컨벤션</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="breadcrumb">코딩 컨벤션 가이드</div>
+
+  <h1>코딩 컨벤션 가이드</h1>
+  <div class="doc-meta">
+    <span>문서번호 DEV-STD-001</span>
+    <span>버전 2.4</span>
+    <span>최종 개정 2026-09-22</span>
+    <span>관리부서 개발본부</span>
+  </div>
+
+  <p>
+    본 문서는 유니온플레이스 개발본부의 표준 코딩 컨벤션을 정의한다.
+    모든 사내 프로젝트의 신규 코드는 본 컨벤션을 따라야 하며,
+    PR(Pull Request) 리뷰 시 본 문서의 규칙 번호(예: <code>JV-03</code>, <code>FW-02</code>)를 근거로 코멘트를 작성한다.
+    기존 코드의 일괄 수정은 강제하지 않되, 수정이 발생하는 파일은 컨벤션에 맞추는 것을 원칙으로 한다(보이스카우트 규칙).
+  </p>
+  <p>
+    사내 Java/Spring 서비스는 표준 프레임워크 <strong>Union Framework</strong>(<code>io.union:union-starter</code>) 위에서 개발한다.
+    응답 포맷·예외 처리·요청 추적·JPA Auditing·JWT 인증은 프레임워크가 제공하므로, 본 문서의 관련 규칙(EX / API / FW 장)은
+    프레임워크 사용을 전제로 기술한다. 프레임워크 자체의 사용법은 별도 문서 <strong>Union Framework 가이드(DEV-STD-002, 레포 <code>wiki-union-framework</code>)</strong> 를 참고한다.
+  </p>
+
+  <div class="callout">
+    <strong>적용 범위</strong> — 사내 전 레포지토리 (Bitbucket <code>COA</code>, <code>COD</code>, <code>ML</code>, <code>SVC</code> 프로젝트 키 하위 전체).
+    예외가 필요한 경우 개발본부장 승인 후 레포 README에 예외 사유를 명시한다.
+  </div>
+
+  <h2>문서 구성</h2>
+  <ul class="toc-list">
+    <li>
+      <a href="01-naming.html">
+        <span class="toc-no">CHAPTER 01</span>
+        <span class="toc-title">네이밍 규칙</span>
+        <span class="toc-desc">패키지 · 클래스 · 메서드 · 변수 · 상수 · DB 객체 이름 규칙 (NM-01 ~ NM-08)</span>
+      </a>
+    </li>
+    <li>
+      <a href="02-java-spring.html">
+        <span class="toc-no">CHAPTER 02</span>
+        <span class="toc-title">Java / Spring 컨벤션</span>
+        <span class="toc-desc">레이어 구조, DTO/Entity 분리, 트랜잭션, Lombok 사용 기준 (JV-01 ~ JV-10)</span>
+      </a>
+    </li>
+    <li>
+      <a href="03-exception-logging.html">
+        <span class="toc-no">CHAPTER 03</span>
+        <span class="toc-title">예외 처리 및 로깅</span>
+        <span class="toc-desc">ErrorCode 기반 예외 체계, 예외 삼킴 금지, 로그 레벨 기준, 민감정보 마스킹 (EX-01 ~ EX-06, LOG-01 ~ LOG-05)</span>
+      </a>
+    </li>
+    <li>
+      <a href="04-rest-api.html">
+        <span class="toc-no">CHAPTER 04</span>
+        <span class="toc-title">REST API 설계 규칙</span>
+        <span class="toc-desc">URI 설계, HTTP 메서드/상태코드, ApiResponse 공통 응답, PageResponse 페이징 (API-01 ~ API-07)</span>
+      </a>
+    </li>
+    <li>
+      <a href="05-git.html">
+        <span class="toc-no">CHAPTER 05</span>
+        <span class="toc-title">Git 브랜치 및 커밋 규칙</span>
+        <span class="toc-desc">브랜치 전략, 커밋 메시지 형식, PR 작성 기준 (GIT-01 ~ GIT-06)</span>
+      </a>
+    </li>
+    <li>
+      <a href="06-framework-rules.html">
+        <span class="toc-no">CHAPTER 06</span>
+        <span class="toc-title">프레임워크 적용 규칙</span>
+        <span class="toc-desc">Union Framework 를 사용할 때 지켜야 할 규칙 — 의존성, 엔티티, 응답, 예외, 인증, 추적, 이벤트, 설정 (FW-01 ~ FW-08)</span>
+      </a>
+    </li>
+  </ul>
+
+  <h2>규칙 표기 원칙</h2>
+  <table>
+    <tr><th>표현</th><th>의미</th></tr>
+    <tr><td><strong>해야 한다 / 금지한다</strong></td><td>필수 규칙. 위반 시 PR 머지 불가.</td></tr>
+    <tr><td><strong>권장한다</strong></td><td>권고 규칙. 합리적 사유가 있으면 예외 허용하되 리뷰 코멘트로 사유를 남긴다.</td></tr>
+    <tr><td><strong>허용한다</strong></td><td>선택 가능. 단, 한 레포 내에서는 일관성을 유지한다.</td></tr>
+  </table>
+
+  <h2>개정 이력</h2>
+  <table>
+    <tr><th>버전</th><th>일자</th><th>주요 변경</th></tr>
+    <tr><td>2.4</td><td>2026-09-22</td><td>Union Framework 1.0 도입에 따른 개정 — 예외 체계(EX-01, EX-03)·공통 응답/페이징(API-02 ~ API-05)을 프레임워크 기준으로 변경, 06장 프레임워크 적용 규칙(FW-01 ~ FW-08) 신설</td></tr>
+    <tr><td>2.3</td><td>2026-05-12</td><td>로깅 민감정보 마스킹 규칙(LOG-05) 추가, 페이징 응답 포맷 보완</td></tr>
+    <tr><td>2.2</td><td>2026-02-03</td><td>Lombok 사용 기준(JV-08) 개정 — <code>@Data</code> 전면 금지</td></tr>
+    <tr><td>2.0</td><td>2025-11-20</td><td>장(章) 구조 개편, 규칙 번호 체계 도입</td></tr>
+  </table>
+</div>
+
+<footer class="doc-footer">
+  © UNIONPLACE 개발본부 · 사내 한정 문서 — 외부 반출 금지 · 문의: dev-standard@unionplace.co.kr
+</footer>
+
+</body>
+</html>

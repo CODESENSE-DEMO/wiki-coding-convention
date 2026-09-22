@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03. 예외 처리 및 로깅 — 유니온플레이스 코딩 컨벤션</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="org">UNIONPLACE</span>
+    <span class="doc">코딩 컨벤션 · CHAPTER 03</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="breadcrumb"><a href="index.html">코딩 컨벤션 가이드</a> &rsaquo; 03. 예외 처리 및 로깅</div>
+
+  <h1>03. 예외 처리 및 로깅</h1>
+  <div class="doc-meta"><span>규칙 EX-01 ~ EX-06 · LOG-01 ~ LOG-05</span><span>최종 개정 2026-09-22</span></div>
+
+  <h2>예외 처리</h2>
+
+  <h3><span class="rule-id">EX-01</span>비즈니스 예외 체계</h3>
+  <p>
+    비즈니스 예외는 Union Framework 의 <code>BusinessException</code>(규칙 위반) 또는
+    <code>EntityNotFoundException</code>(조회 대상 없음)을 상속한다.
+    에러 코드는 도메인별로 <code>io.union.core.error.ErrorCode</code> 를 구현한 enum
+    (<code>{도메인}ErrorCode</code>)으로 중앙 관리하며, 코드 문자열은 <code>{도메인}_{3자리 숫자}</code> 형식으로 한다
+    (예: <code>CUSTOMER_001</code>, <code>CONSENT_002</code>). HTTP 상태 코드는 ErrorCode 의 <code>status</code> 에 함께 정의한다.
+    <code>COMMON_*</code> 는 프레임워크 예약 코드이므로 애플리케이션에서 재정의하지 않는다.
+  </p>
+  <pre><code>public enum CustomerErrorCode implements ErrorCode {
+    CUSTOMER_NOT_FOUND("CUSTOMER_001", "고객을 찾을 수 없습니다.", 404),
+    CUSTOMER_ALREADY_WITHDRAWN("CUSTOMER_002", "이미 탈회된 고객입니다.", 409);
+    // code / message / status 필드와 getter
+}
+
+public class CustomerNotFoundException extends EntityNotFoundException {
+    public CustomerNotFoundException(Long id) {
+        super(CustomerErrorCode.CUSTOMER_NOT_FOUND, "고객을 찾을 수 없습니다. id=" + id);
+    }
+}</code></pre>
+  <p>
+    단순 조건 검증은 예외 클래스를 만들지 않고 <code>Assert</code> 유틸을 사용한다.
+    도메인 규칙 위반에 <code>IllegalStateException</code>·<code>IllegalArgumentException</code> 을 던지는 것을 금지한다 —
+    전역 핸들러가 원인을 알 수 없는 500(<code>COMMON_500</code>)으로 처리한다.
+  </p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>if (status == CustomerStatus.WITHDRAWN) {
+    throw new IllegalStateException("이미 탈회된 고객입니다.");   // → 500
+}</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>Assert.isTrue(status != CustomerStatus.WITHDRAWN, CustomerErrorCode.CUSTOMER_ALREADY_WITHDRAWN);  // → 409
+Assert.notNull(tier, "등급은 필수입니다.");                                                          // → 400 COMMON_400</code></pre>
+  </div>
+
+  <h3><span class="rule-id">EX-02</span>예외 삼킴 금지</h3>
+  <p>catch 블록을 비워 두거나, 로그만 남기고 정상 흐름처럼 계속 진행하는 것을 금지한다.</p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>try {
+    bitbucketClient.postComment(prId, comment);
+} catch (Exception e) {
+    // 무시
+}</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>try {
+    bitbucketClient.postComment(prId, comment);
+} catch (BitbucketApiException e) {
+    log.error("PR 코멘트 게시 실패. prId={}", prId, e);
+    throw new CommentPublishException(prId, e);
+}</code></pre>
+  </div>
+
+  <h3><span class="rule-id">EX-03</span>예외 처리는 전역 핸들러로 모은다</h3>
+  <p>
+    HTTP 응답 변환은 프레임워크의 <code>GlobalExceptionHandler</code> 가 수행한다
+    (프레임워크 가이드 03 매핑표 참고).
+    Controller·Service에서 try-catch로 에러 응답을 직접 만드는 것을 금지한다.
+    애플리케이션에서 <code>@RestControllerAdvice</code> 를 새로 정의하는 것도 금지한다 — 프레임워크 핸들러가
+    통째로 비활성화되어 응답 포맷이 깨진다. 공통 처리가 더 필요하면 개발본부에 프레임워크 반영을 요청한다.
+  </p>
+
+  <h3><span class="rule-id">EX-04</span>원인 예외를 보존한다</h3>
+  <p>예외를 변환해 다시 던질 때는 반드시 원인 예외(cause)를 함께 전달한다. 스택트레이스 유실을 금지한다.</p>
+
+  <h3><span class="rule-id">EX-05</span><code>Exception</code> / <code>Throwable</code>을 직접 catch하지 않는다</h3>
+  <p>구체적인 예외 타입을 catch한다. 최후 방어선이 필요한 경우는 전역 핸들러와 Celery task 최상위로 한정한다.</p>
+
+  <h3><span class="rule-id">EX-06</span>제어 흐름에 예외를 사용하지 않는다</h3>
+  <p>"없을 수 있는" 정상 상황은 <code>Optional</code>·boolean 반환으로 표현하고, 예외는 비정상 상황에만 사용한다.</p>
+
+  <h2>로깅</h2>
+
+  <h3><span class="rule-id">LOG-01</span>로그 레벨 기준</h3>
+  <table>
+    <tr><th>레벨</th><th>기준</th><th>예</th></tr>
+    <tr><td>ERROR</td><td>즉시 확인이 필요한 실패. 알림 대상.</td><td>vLLM 호출 실패로 리뷰 미게시</td></tr>
+    <tr><td>WARN</td><td>처리는 계속되나 비정상 신호.</td><td>fallback 경로로 KB 결정, 재시도 발생</td></tr>
+    <tr><td>INFO</td><td>운영상 의미 있는 상태 변화.</td><td>KB 인덱싱 시작/완료, 정책 변경</td></tr>
+    <tr><td>DEBUG</td><td>개발/장애 분석용 상세 흐름. 운영 기본 출력 제외.</td><td>컨텍스트 빌드 중간 산출물 크기</td></tr>
+  </table>
+
+  <h3><span class="rule-id">LOG-02</span>플레이스홀더 바인딩을 사용한다</h3>
+  <p>문자열 연결(<code>+</code>)로 로그 메시지를 만드는 것을 금지한다.</p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>log.info("리뷰 시작: " + prId + ", repo: " + repoSlug);</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>log.info("리뷰 시작. prId={}, repoSlug={}", prId, repoSlug);</code></pre>
+  </div>
+
+  <h3><span class="rule-id">LOG-03</span>로그에는 식별자를 포함한다</h3>
+  <p>
+    추적 가능하도록 관련 식별자(customerId, prId, projectId 등)를 <code>key=value</code> 형식으로 포함한다.
+    "실패했습니다"처럼 식별자 없는 로그를 금지한다.
+    요청 추적 ID(traceId)는 프레임워크가 MDC 에 넣어 주므로 로그 패턴에 <code>[%X{traceId:-}]</code> 를 포함하고,
+    메시지 본문에 직접 쓰지 않는다.
+  </p>
+
+  <h3><span class="rule-id">LOG-04</span><code>System.out.println</code> / <code>printStackTrace</code> 금지</h3>
+  <p>모든 출력은 SLF4J 로거를 통한다. Python은 <code>print</code> 대신 <code>logging</code> 모듈을 사용한다.</p>
+
+  <h3><span class="rule-id">LOG-05</span>민감정보 마스킹</h3>
+  <p>
+    다음 항목은 로그에 평문 기록을 금지한다: 액세스 토큰·비밀키, 비밀번호, 주민등록번호,
+    계좌·카드번호, 고객 개인정보(이름·연락처·이메일 전체).
+    부분 확인이 필요한 경우 마스킹하여 기록한다 (예: <code>token=xoxb-****</code>, <code>email=k***@unionplace.co.kr</code>).
+    소스 코드·로그·예외 메시지에 시크릿이 포함되는 것은 보안 사고로 간주한다.
+  </p>
+
+  <div class="callout">
+    <strong>리뷰 중점 항목</strong> — 예외 삼킴(EX-02), 스택트레이스 유실(EX-04), 민감정보 평문 로깅(LOG-05)은
+    위반 시 머지 불가로 처리한다.
+  </div>
+
+  <div class="page-nav">
+    <a href="02-java-spring.html">&larr; 02. Java / Spring 컨벤션</a>
+    <a href="04-rest-api.html">04. REST API 설계 규칙 &rarr;</a>
+  </div>
+</div>
+
+<footer class="doc-footer">© UNIONPLACE 개발본부 · 사내 한정 문서</footer>
+
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06. 프레임워크 적용 규칙 — 유니온플레이스 코딩 컨벤션</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="org">UNIONPLACE</span>
+    <span class="doc">코딩 컨벤션 · CHAPTER 06</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="breadcrumb"><a href="index.html">코딩 컨벤션 가이드</a> &rsaquo; 06. 프레임워크 적용 규칙</div>
+
+  <h1>06. 프레임워크 적용 규칙</h1>
+  <div class="doc-meta"><span>규칙 FW-01 ~ FW-08</span><span>최종 개정 2026-09-22</span></div>
+
+  <p>
+    본 장은 사내 표준 프레임워크 <strong>Union Framework</strong> 위에서 애플리케이션을 작성할 때 지켜야 할 규칙이다.
+    프레임워크가 이미 제공하는 기능을 애플리케이션에서 다시 구현하거나 우회하는 것을 막고,
+    모든 서비스가 같은 응답·예외·추적·인증 동작을 갖도록 하는 것이 목적이다.
+    각 구성요소의 상세 사용법은 Union Framework 가이드를 참고한다.
+  </p>
+
+  <h2>의존성과 부트스트랩</h2>
+
+  <h3><span class="rule-id">FW-01</span><code>union-starter</code> 하나만 의존한다</h3>
+  <p>
+    웹 애플리케이션은 <code>io.union:union-starter</code> 를 의존하고, <code>spring-boot-starter-web</code> ·
+    <code>spring-boot-starter-data-jpa</code> · <code>spring-boot-starter-security</code> · <code>spring-boot-starter-validation</code> 을
+    직접 선언하는 것을 금지한다(스타터가 전이 의존으로 가져온다). 프레임워크 버전은 <code>union.version</code> 프로퍼티로 관리한다.
+    Application 클래스에는 <code>@SpringBootApplication</code> 외에 <code>@EnableJpaAuditing</code>, <code>@EnableWebSecurity</code>,
+    <code>@EnableMethodSecurity</code> 를 붙이지 않는다 — 프레임워크 자동 설정과 충돌한다.
+  </p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>@EnableJpaAuditing          // 프레임워크가 이미 활성화 → 빈 충돌
+@SpringBootApplication
+public class CustomerPocApplication { ... }</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>@SpringBootApplication
+@ConfigurationPropertiesScan
+public class CustomerPocApplication { ... }</code></pre>
+  </div>
+
+  <h2>영속성</h2>
+
+  <h3><span class="rule-id">FW-02</span>엔티티는 <code>BaseEntity</code> 를 상속한다</h3>
+  <p>
+    모든 <code>@Entity</code> 는 <code>io.union.data.entity.BaseEntity</code> 또는 <code>SoftDeletableEntity</code> 를 상속한다.
+    생성/수정 일시·작성자 필드(<code>@CreatedDate</code> 등)를 엔티티에 직접 선언하거나 프로젝트별 BaseEntity 를 만드는 것을 금지한다.
+    감사 이력·법적 보관 의무가 있는 데이터(동의 이력, 거래 이력 등)는 <code>SoftDeletableEntity</code> 를 상속하고
+    <code>delete()</code> 로 소프트 삭제한다. 물리 삭제(<code>repository.delete</code>)는 보관 의무가 없는 데이터에만 허용한다.
+  </p>
+  <pre><code>@Entity
+@Table(name = "consents")
+@SQLRestriction("deleted = false")
+public class Consent extends SoftDeletableEntity { ... }</code></pre>
+
+  <h2>웹 계층</h2>
+
+  <h3><span class="rule-id">FW-03</span>컨트롤러는 DTO 를 그대로 반환한다</h3>
+  <p>
+    프레임워크가 반환값을 <code>ApiResponse</code> 로 자동 래핑한다. 컨트롤러에서 <code>ResponseEntity</code>,
+    <code>ApiResponse.ok(...)</code> 로 감싸는 것을 금지한다. 상태 코드가 200 이 아니면 <code>@ResponseStatus</code> 를 사용한다.
+    <code>String</code> 을 반환하면 래핑되지 않으므로 문자열 하나도 DTO(record)로 감싼다.
+    <code>@RawResponse</code> 는 파일 다운로드·외부 규격 콜백처럼 envelope 를 쓸 수 없는 경우에만 허용하며, 사유를 주석으로 남긴다.
+  </p>
+
+  <h3><span class="rule-id">FW-04</span>예외는 <code>ErrorCode</code> 로 표현한다</h3>
+  <p>
+    도메인마다 <code>{도메인}ErrorCode implements ErrorCode</code> enum 을 두고, 예외는 <code>BusinessException</code> /
+    <code>EntityNotFoundException</code> 을 상속하거나 <code>Assert</code> 로 던진다(EX-01).
+    <code>RuntimeException</code> 을 직접 상속한 예외 클래스, <code>@RestControllerAdvice</code> 신규 정의(EX-03),
+    <code>@ResponseStatus</code> 를 예외 클래스에 붙이는 방식을 금지한다.
+  </p>
+
+  <h2>인증 / 인가</h2>
+
+  <h3><span class="rule-id">FW-05</span>현재 사용자는 <code>@CurrentUser</code>, 인가는 <code>@PreAuthorize</code></h3>
+  <p>
+    컨트롤러에서 인증 사용자는 <code>@CurrentUser UnionUser user</code> 파라미터로 받는다.
+    <code>SecurityContextHolder</code> 를 직접 조회하거나 <code>Authentication</code> 을 파라미터로 받는 것을 금지한다.
+    권한 검사는 <code>@PreAuthorize("hasRole('ADMIN')")</code> 를 컨트롤러 메서드에 선언하고, 서비스 본문에서
+    <code>if (!user.hasRole(...))</code> 분기로 처리하지 않는다. 개인정보를 반환하는 조회 API 는 반드시 인가 규칙(본인 또는 관리자)을 갖는다 —
+    인증만 통과하면 누구나 조회 가능한 엔드포인트는 IDOR 로 간주하고 머지 불가로 처리한다.
+    인증 제외 경로는 코드가 아니라 <code>union.security.permit-all</code> 설정으로만 추가한다.
+    <code>SecurityFilterChain</code> 을 애플리케이션에서 직접 정의하는 것은 개발본부 승인이 필요하다.
+  </p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>@GetMapping("/{id}")
+public CustomerResponse get(@PathVariable Long id) {
+    return customerService.getCustomer(id);      // 인증만 되면 타인의 PII 조회 가능
+}</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>@GetMapping("/{id}")
+@PreAuthorize("hasRole('ADMIN') or #id == T(Long).valueOf(principal.id())")
+public CustomerResponse get(@PathVariable Long id, @CurrentUser UnionUser user) {
+    return customerService.getCustomer(id);
+}</code></pre>
+  </div>
+
+  <h2>추적 / 이벤트 / 설정</h2>
+
+  <h3><span class="rule-id">FW-06</span>TraceId 는 프레임워크 것을 쓰고 외부 호출에 전파한다</h3>
+  <p>
+    요청 추적 ID 를 직접 생성하거나 별도 헤더(<code>X-Request-Id</code> 등)를 정의하는 것을 금지한다.
+    필요하면 <code>UnionContext.getTraceId()</code> 로 읽는다. 다른 사내 서비스를 HTTP 로 호출할 때는
+    <code>X-Trace-Id</code> 헤더로 전파해야 한다. <code>UnionContext</code> 는 ThreadLocal 이므로
+    <code>@Async</code>·별도 스레드에서는 값을 인자로 넘긴다.
+  </p>
+
+  <h3><span class="rule-id">FW-07</span>트랜잭션 후속 작업은 도메인 이벤트로 분리한다</h3>
+  <p>
+    알림 발송·외부 API 호출·감사 로그 전송처럼 트랜잭션 결과에 따라 실행되어야 하는 후속 작업은
+    Service 본문에서 try-catch 로 감싸 호출하지 않고(JV-06, EX-02), <code>DomainEvent</code> 를 상속한 이벤트를
+    <code>DomainEventPublisher.publish(...)</code> 로 발행한 뒤 <code>@TransactionalEventListener</code> 에서 처리한다.
+  </p>
+  <div class="example bad">
+    <span class="label">나쁜 예</span>
+    <pre><code>customer.block(request.getReason());
+try {
+    auditClient.send(customer);         // 트랜잭션 내 외부 I/O + 예외 삼킴
+} catch (Exception e) {
+    log.error("audit 실패", e);
+}</code></pre>
+  </div>
+  <div class="example good">
+    <span class="label">좋은 예</span>
+    <pre><code>customer.block(request.getReason());
+DomainEventPublisher.publish(new CustomerBlockedEvent(customer.getId(), request.getReason()));
+
+// 별도 컴포넌트
+@TransactionalEventListener
+public void onBlocked(CustomerBlockedEvent event) {
+    auditClient.send(event);            // 커밋 이후 실행
+}</code></pre>
+  </div>
+
+  <h3><span class="rule-id">FW-08</span>프레임워크 설정과 빈 오버라이드</h3>
+  <p>
+    프레임워크 동작은 <code>union.*</code> 프로퍼티로만 조정한다. <code>union.security.jwt.secret</code> 은
+    소스·설정 파일에 평문으로 두는 것을 금지하며 환경 변수 또는 시크릿 매니저에서 주입한다(LOG-05, GIT 참고).
+    <code>@ConditionalOnMissingBean</code> 으로 열려 있는 프레임워크 빈(<code>GlobalExceptionHandler</code>,
+    <code>PasswordEncoder</code>, <code>AuditorAware</code> 등)을 애플리케이션에서 재정의할 때는 PR 본문에 사유를 명시하고
+    개발본부 리뷰어를 지정한다. <code>union.web.response-wrapping.enabled=false</code> 로 전체 래핑을 끄는 것을 금지한다.
+  </p>
+
+  <div class="callout">
+    <strong>리뷰 중점 항목</strong> — 자체 BaseEntity/Auditing(FW-02), ResponseEntity 직접 반환(FW-03),
+    RuntimeException 직상속·Advice 신규 정의(FW-04), 인가 없는 PII 조회(FW-05)는 위반 시 머지 불가로 처리한다.
+  </div>
+
+  <div class="page-nav">
+    <a href="05-git.html">&larr; 05. Git 브랜치 및 커밋 규칙</a>
+    <a href="index.html">목차로 &rarr;</a>
+  </div>
+</div>
+
+<footer class="doc-footer">© UNIONPLACE 개발본부 · 사내 한정 문서</footer>
+
+</body>
+</html>
